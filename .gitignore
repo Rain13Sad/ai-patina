@@ -1,0 +1,22 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Packaged skill artifacts (use GitHub Releases instead)
+*.zip
+
+# Local agent workspace data — personal memory, never published
+.workbuddy-ai/
+.claude/
+
+# Local working copies of source research notes.
+# The published version lives in docs/ai-text-detection-landscape.md.
+/AI文本检测技术全景-20261022.md
+/反制AI文本检测的手段-20261022.md
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
