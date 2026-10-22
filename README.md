@@ -43,7 +43,7 @@ If someone asks "get my AI rate under 15% so I can submit," the skill's first mo
 ## Install
 
 ```bash
-git clone https://github.com/<your-name>/ai-patina.git
+git clone https://github.com/Rain13Sad/ai-patina.git
 cp -r ai-patina/skills/human-voice ~/.workbuddy-ai/skills/    # WorkBuddy
 # cp -r ai-patina/skills/human-voice ~/.claude/skills/        # Claude-style hosts
 ```

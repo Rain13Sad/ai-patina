@@ -43,7 +43,7 @@
 ## 安装
 
 ```bash
-git clone https://github.com/<你的用户名>/ai-patina.git
+git clone https://github.com/Rain13Sad/ai-patina.git
 cp -r ai-patina/skills/human-voice ~/.workbuddy-ai/skills/    # WorkBuddy
 # cp -r ai-patina/skills/human-voice ~/.claude/skills/        # Claude 系宿主
 ```
