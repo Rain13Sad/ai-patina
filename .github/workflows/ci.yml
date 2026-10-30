@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: py${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.9", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: JSON output is parseable and versioned
+        shell: bash
+        run: |
+          python skills/human-voice/scripts/humanity_check.py examples/zh-before.md --json > out.json
+          python - <<'PY'
+          import json
+          d = json.load(open("out.json", encoding="utf-8"))
+          assert d["schema_version"], "missing schema_version"
+          assert d["generator"]["version"], "missing generator version"
+          assert d["results"][0]["findings"], "expected findings on the AI-style fixture"
+          print("schema ok:", d["schema_version"], d["generator"]["version"])
+          PY
+
+      - name: Comparison mode runs
+        shell: bash
+        run: |
+          python skills/human-voice/scripts/humanity_check.py examples/zh-after.md \
+            --compare examples/zh-before.md --fail-on major
+
+      - name: A blocker must fail the build
+        shell: bash
+        run: |
+          set +e
+          python skills/human-voice/scripts/humanity_check.py examples/zh-before.md \
+            --fail-on major > /dev/null
+          code=$?
+          set -e
+          if [ "$code" -ne 2 ]; then
+            echo "expected exit 2 from --fail-on major, got $code"
+            exit 1
+          fi
+          echo "exit code contract holds"
+
+      - name: Script stays dependency-free
+        shell: bash
+        run: |
+          # 只用标准库是这个技能的硬约束：用户会把单个文件复制进任意宿主
+          python - <<'PY'
+          import ast, pathlib, sys
+          src = pathlib.Path("skills/human-voice/scripts/humanity_check.py").read_text(encoding="utf-8")
+          mods = set()
+          for node in ast.walk(ast.parse(src)):
+              if isinstance(node, ast.Import):
+                  mods.update(a.name.split(".")[0] for a in node.names)
+              elif isinstance(node, ast.ImportFrom) and node.module:
+                  mods.add(node.module.split(".")[0])
+          stdlib = set(getattr(sys, "stdlib_module_names", ()))
+          if not stdlib:
+              print("stdlib_module_names unavailable on", sys.version.split()[0], "- skipped")
+              sys.exit(0)
+          extra = sorted(m for m in mods if m not in stdlib)
+          if extra:
+              print("non-stdlib imports:", extra)
+              sys.exit(1)
+          print("stdlib only:", ", ".join(sorted(mods)))
+          PY

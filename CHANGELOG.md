@@ -6,6 +6,64 @@ versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-30
+
+The script catches up with the document. v1.0 argued well and measured poorly:
+the checker was Chinese-only, could not compare two drafts, could not say which
+line was wrong, and ignored the genre table the skill spends a page on.
+
+### Added
+
+- `--genre` with six threshold profiles (`general`, `academic`, `essay`, `copy`,
+  `novel`, `report`) and per-genre exemptions — enumeration in a report, zero
+  colloquialism in a paper. `--list-genres` prints the table.
+- `--compare BASE` — a delta table with direction and a one-line verdict. This
+  is now the primary verb of S5; two independent reports were never a
+  comparison.
+- `--ui-lang zh|en` — report language independent of text language. An English
+  draft now gets an English report by default.
+- Severity model (`blocker` / `major` / `minor`) with ranking. Findings are
+  sorted by severity instead of insertion order, so a mechanical tell can no
+  longer be pushed off the list by six soft stylistic ones.
+- Line-anchored evidence for every mechanical finding (`L12: …`).
+- `--fail-on blocker|major` and exit code `2`, for CI and pre-commit.
+- `--md`, `--max-flags`, `--list-genres`, `--version`, and stdin via `-`.
+- English tells promoted from a word list to actual findings: tricolon
+  stacking, em-dash density, "not just X, but Y", and the
+  `delve/tapestry/robust` cluster. Plus `genuinely/quietly/truly` as a
+  *pseudo-human* tell — the shortcut has become its own fingerprint.
+- `findings[].moves` maps every finding to the rewrite move that fixes it
+  (M1–M14), so an agent can act without re-reading the skill.
+- Versioned JSON envelope (`schema_version`, `generator`).
+- `references/cli.md`, `docs/cli.md`, `docs/roadmap.md`, `examples/` fixtures
+  in both languages, `tests/` (42 cases), `Makefile`, GitHub Actions CI.
+
+### Changed
+
+- Comparison skips metrics whose sample is too small to be stable, and treats
+  sub-epsilon deltas as flat. A 0.006 drop in hapax ratio is noise; calling it
+  "worse" would manufacture a conclusion.
+- Reliability is measured in words for English, not characters. 300 characters
+  is 50 words, not "medium confidence".
+- Text under 60 characters (30 English words) now keeps mechanical findings and
+  drops statistical ones, instead of going silent or reporting noise.
+- `general` genre now expects at least one colloquial trace, matching v1.0
+  behaviour; `academic` and `report` do not.
+
+### Fixed
+
+- `像` matched inside 图像 / 像素 / 成像 / 肖像, inflating simile density on any
+  technical text.
+- A single newline was treated as a sentence break, so hard-wrapped prose
+  reported roughly twice the sentence count and a collapsed CV.
+- `--text ""` silently produced an empty run (argparse truthiness).
+- File read errors surfaced as a traceback; now a one-line message and exit 1.
+- Non-UTF-8 Windows consoles raised `UnicodeEncodeError` on `═` and `≤`.
+- English `first_person` counted `we` case-sensitively only.
+- `and` / `the` topped the "repeated word" finding because English stopwords
+  were never filtered.
+- JSON output mutated the caller's result dict while localising the note.
+
 ## [1.0.0] — 2026-10-22
 
 Initial release.

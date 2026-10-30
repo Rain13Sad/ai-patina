@@ -2,6 +2,10 @@
 
 [English](README.md) · **简体中文**
 
+[![CI](https://github.com/Rain13Sad/ai-patina/actions/workflows/ci.yml/badge.svg)](https://github.com/Rain13Sad/ai-patina/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](docs/cli.md)
+
 > 一个给 AI 代理用的技能：把机器写的文本改成有人味的样子，AI 生成率随之下降——那是副产品。
 
 *Patina* 是铜绿，是被手反复摩挲之后才长出来的那层东西。名字就是这个意思：有包浆的文字，是过了某人的手——他的具体经历、他的立场、他决定不说的那些话。
@@ -50,7 +54,7 @@ cp -r ai-patina/skills/human-voice ~/.workbuddy-ai/skills/    # WorkBuddy
 
 只给单个项目用，就放到项目的 `.workbuddy-ai/skills/` 或 `.claude/skills/` 下。
 
-零依赖。自查脚本只用 Python 3 标准库。
+零依赖。自查脚本只用 Python 3 标准库，而且这条守得住——CI 里有一项检查，一旦出现第三方 import 就失败。
 
 ## 使用
 
@@ -62,38 +66,68 @@ cp -r ai-patina/skills/human-voice ~/.workbuddy-ai/skills/    # WorkBuddy
 也可以直接跑脚本：
 
 ```bash
-python skills/human-voice/scripts/humanity_check.py draft.md
-python skills/human-voice/scripts/humanity_check.py before.md after.md   # 前后对比
-python skills/human-voice/scripts/humanity_check.py --text "一段话" --json
+python skills/human-voice/scripts/humanity_check.py draft.md --genre essay
+python skills/human-voice/scripts/humanity_check.py draft.md --compare draft.before.md
+python skills/human-voice/scripts/humanity_check.py draft.md --json --md
+cat draft.md | python skills/human-voice/scripts/humanity_check.py -
 ```
 
-典型 AI 段落的输出长这样：
+一段典型的 AI 稿，`--genre essay` 下长这样：
 
 ```
-[句长波动]  5 句  均 42.6  标准差 13.5  CV 0.32  区间 27–58   → 明显
-            短句(≤10字) 0.0%  [明显]   长句(≥45字) 40.0%
-[段落]      1 段  均 234.0 字  CV 0.0  → 样本不足
-[格式痕迹]  数字空格 0   枚举 1   升华词 2 ['凝聚', '行稳致远']
+═══ examples/zh-before.md  (353 字符, zh, 评论) ═══
 
-── 待办（按优先级）──
-1. 句长过于均匀：CV=0.32（人类常 >0.45）。每 3–4 句插一个极短句。
-2. 主题升华：空转大词：['凝聚', '行稳致远']。删掉拔高，让结论停在具体层面。
+[可信度]  中 —— 可看出趋势，但阈值判断会抖
+[句长波动]  8 sentences  mean 39.1  sd 14.9  CV 0.38  range 18-67
+            short(<=10 字) 0.0%   long(>=45 字) 25.0%   adjacent jump 22.4
+[段落]  4  mean 78.2  CV 0.16  62-96
+[格式痕迹]  digit-space 0  enum 2  grandiose 2  connectors 50.0%
+
+── 待办（按严重度）──
+1. [主要] 缺少短句：极短句仅占 0.0%，目标 ≥12.0%。整篇没有喘气的地方。
+      -> M7
+2. [主要] 段落等长：段落长度 CV=0.16，目标 ≥0.4。长短段交替，允许某段只有一句话。
+      -> M1, M3
+3. [主要] 主题升华：空转大词 2 个：['凝聚', '行稳致远']。删掉拔高，让结论停在具体层面。
+      L7: 总而言之，远程办公是时代发展的必然趋势。唯有积极拥抱变革……
+      -> M2
 ```
 
-脚本中英双语，**刻意不输出"AI 率"**。它给六项可解释指标加一份按优先级排的待办。给一个数字，那是假精度。
+每条待办后面直接挂着对应的改写动作编号（M1–M14），代理不用回头翻文档就知道下一步做什么。
 
-## 怎么用
+改完再跟原稿比，而不是人肉看两份报告：
+
+```
+═══ 对比：examples/zh-before.md → examples/zh-after.md ═══
+
+                            before     after     delta
+句长 CV                       0.38      0.53     +0.15  改善
+短句占比 %                     0.0      15.4     +15.4  改善
+段落 CV                       0.16      0.54     +0.38  改善
+段首连接词 %                  50.0       0.0     -50.0  改善
+空转大词                         2         0        -2  改善
+枚举标记                         2         0        -2  改善
+
+共 11 项指标：6 改善 / 0 退步 / 5 持平。
+方向正确：结构信号在往人的一侧走。
+```
+
+脚本中英双语：英文稿默认出英文报告，中文稿出中文报告，`--ui-lang` 可以强制覆盖。它**刻意不输出"AI 率"**——那个数字你改一下分段就会变，给出来只是假精度。
+
+完整参数与 JSON 契约见 [`docs/cli.md`](docs/cli.md)。
+
+## 工作流
 
 | 阶段 | 做什么 |
 |---|---|
-| **S0** | 定体裁、定读者、定"人"的浓度。这一步错了，后面全错 |
-| **S1** | 诊断：跑脚本、做五维审计、查事实——编造的引用改不回来 |
-| **S2** | 重写结构（占总工作量七成）。先定骨架，骨架不换，改多少词都白费 |
+| **S0** | 定体裁、读者、"人"的浓度。这一步错了，后面全错 |
+| **S1** | 诊断：带上 `--genre` 跑自查，做五维审计，查事实——虚构引用改不回来 |
+| **S2** | 结构重写，占总工作量七成。先换骨架；骨架不换，改多少词都白费 |
 | **S3** | 句级节奏手术。目标不是句子更花哨，是读起来有呼吸 |
-| **S4** | 机械清扫痕迹。不需要判断力，但漏一项就白干 |
-| **S5** | 验收：复跑脚本、朗读、倒读 |
+| **S4** | 机械痕迹清扫。不需要判断力，但漏一项就白干 |
+| **S5** | 验收：`--compare` 对原稿、出声读、倒着读 |
 
-**顺序不能乱。** S4 在 S2/S3 之后；之后不允许再"整体润色一遍"——会把刚做的手术抹平。
+**顺序有纪律**：S4 必须在 S2/S3 之后；S5 之后不允许再"整体润色一遍"——会把刚做的手术全部抹平。
 
 ## 14 个动作
 
@@ -101,54 +135,75 @@ python skills/human-voice/scripts/humanity_check.py --text "一段话" --json
 |---|---|---|
 | A1 | 换骨架 | 定义→背景→意义的开场 |
 | A2 | 删升华 | 结尾强行拔高 |
-| A3 | 砍三成 | 面面俱到冒充立场 |
-| A4 | 加反例 | 自证的论证 |
-| A5 | 换论证关系 | 第一第二第三，其实没关系 |
+| A3 | 砍三成 | 用面面俱到代替立场 |
+| A4 | 加反例 | 自我印证的论证 |
+| A5 | 换论证关系 | 没有真实关系的第一第二第三 |
 | A6 | 注入不可替换的细节 | "很多企业""显著提升" |
 | B7 | 长短手术 | 句长均匀 |
-| B8 | 拆排比 | 三项并列、三个比喻连排 |
+| B8 | 拆排比 | 三项并列、比喻连排 |
 | B9 | 插入语与自我修正 | 一路顺滑 |
-| B10 | 换视角 | 换同义词，指纹不变 |
-| B11 | 去连接词依赖 | 段首"此外/然而" |
-| C12 | 建立个人偏科 | 用词分布过于均衡 |
-| C13 | 降形容词密度 | "非常重要""显著" |
-| C14 | 术语精度 | 抽象层堆叠 |
+| B10 | 换视角 | 只换同义词、指纹原样保留 |
+| B11 | 去连接词依赖 | 段首的"此外/然而" |
+| C12 | 建立个人偏科 | 用词过于均衡 |
+| C13 | 降形容词密度 | "非常重要""显著地" |
+| C14 | 术语精度 | 抽象词堆叠 |
 
-带反例正例的完整版：[`rewrite-moves.md`](skills/human-voice/references/rewrite-moves.md)（中文）· [`en-writing-guide.md`](skills/human-voice/references/en-writing-guide.md)（英文）
+带反例正例的全文：[`rewrite-moves.md`](skills/human-voice/references/rewrite-moves.md)（中文）· [`en-writing-guide.md`](skills/human-voice/references/en-writing-guide.md)（英文）。
 
 ## 仓库结构
 
 ```
-skills/human-voice/
-├── SKILL.md                      # 技能主体：边界、审计、工作流
-├── references/
-│   ├── rewrite-moves.md          # 14 个动作，中文示例
-│   ├── en-writing-guide.md       # 同一套方法，英文示例 + 英文专属痕迹
-│   ├── traces-checklist.md       # S4 清扫清单 + 正式文体的豁免表
-│   ├── voice-profile.md          # 六维声音提取 + 8 种人格原型
-│   ├── detector-model.md         # 检测怎么工作，改到什么程度够
-│   └── before-after.md           # 三个完整改写案例
-├── scripts/
-│   └── humanity_check.py         # 启发式自查，仅标准库
-└── docs/
-    └── ai-text-detection-landscape.md   # 背景研究
+ai-patina/
+├── README.md · README.zh-CN.md
+├── CHANGELOG.md · LICENSE · Makefile
+├── .github/workflows/ci.yml          # 测试、JSON 契约、仅标准库检查
+├── docs/
+│   ├── cli.md                        # 参数、退出码、JSON schema
+│   ├── roadmap.md                    # v1.1 为什么长这样
+│   └── ai-text-detection-landscape.md
+├── examples/                         # 中英各一组改前/改后样本
+├── tests/test_humanity_check.py      # 42 个用例，标准库 unittest
+└── skills/human-voice/
+    ├── SKILL.md                      # 技能主体：边界、审计、工作流
+    ├── references/
+    │   ├── cli.md                    # 四条命令覆盖全部工作流
+    │   ├── rewrite-moves.md          # 14 个动作，中文示例
+    │   ├── en-writing-guide.md       # 同一套方法，英文示例 + 英文痕迹
+    │   ├── traces-checklist.md       # S4 清扫 + 正式文体豁免表
+    │   ├── voice-profile.md          # 六维声音提取，8 种原型
+    │   ├── detector-model.md         # 检测原理，改到什么程度够
+    │   └── before-after.md           # 三个完整改写案例
+    └── scripts/humanity_check.py     # 自查脚本，仅标准库，不给分数
 ```
+
+## 开发
+
+```bash
+make test        # python -m unittest discover -s tests -v
+make compare     # 中文样本的差值表
+make compare-en  # 英文样本
+make blockers    # 退出码 2，CI 契约
+```
+
+阈值只有一个地方改：`humanity_check.py` 顶部的 `GENRES` 表。改一个数字，finding、对比行、测试会一起变。
+
+设计取舍与刻意没做的事：[`docs/roadmap.md`](docs/roadmap.md)。
 
 ## 设计原则
 
-- **是工艺，不是规避。** AI 率下降是文本变好的结果，不是反过来。
-- **不给分数。** 脚本只报可解释的指标，拒绝产出一个假装是测量值的数字。
-- **人味随体裁变。** 学术文本里，人味是**判断的锋利**，不是口语化。把论文写成公众号是另一种失败。技能里有体裁浓度表，也有一张豁免表——公文的分点、论文的"综上所述"是规范要求，不是痕迹。
-- **脚本不对事实表态。** 编造引用是最强的 AI 信号，任何改写都救不了，所以事实核查是独立且不可跳过的一步。
-- **边界写在技能里，不只写在 README 里。** 代理运行时就会读到。
+- **是工艺，不是规避。** 降 AI 率是文本变好之后发生的事，不是反过来。
+- **不给分数。** 脚本报可解释的指标，拒绝产出一个假装是测量结果的数字。
+- **人味随体裁变化。** 学术文本的人味是判断锋利、可证伪，不是口语。把论文写成公众号是另一种失败。技能里有体裁表，也有正式文体的豁免表——公文的分点、论文的"综上所述"是规范要求，清了反而是破坏。
+- **脚本对事实没有判断力。** 虚构引用是最强的 AI 信号，任何改写都救不了，所以查事实是独立且不可跳过的一步。
+- **边界写在技能里，不只写在 README 里。** 代理运行时读得到。
 
 ## 背景
 
-整理自一份关于 AI 文本检测实际如何工作的调研——统计特征、零样本概率法、监督分类器、水印、元数据标识——以及证据显示哪些反制手段真的成立。一句话版本：重写胜过换词，结构胜过措辞，而过程证据是唯一无法伪造的一层。
+这份技能来自一次对 AI 文本检测实际原理的调研——统计特征、零样本概率方法、监督分类器、水印、元数据标识——以及证据显示哪些反制手段真的站得住。短版：改写胜过换词，结构胜过措辞，而过程证据是唯一一层谁也补不出来的东西。
 
 见 [`docs/ai-text-detection-landscape.md`](docs/ai-text-detection-landscape.md)。
 
-> 检测器是筛查工具，是指南针，不是判决书。这句话对攻防双方同时成立：分数不能作为处分依据，"过了检测"也不等于"没问题"。
+> 检测器是筛子、是罗盘，不是判决。这句话对两边都成立：分数不该成为处分依据，通过检测也不代表作品站得住。
 
 ## 许可
 

@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+
+# Scratch output from the CLI examples in docs
+out.json
 
 # Packaged skill artifacts (use GitHub Releases instead)
 *.zip

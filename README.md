@@ -2,6 +2,10 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
+[![CI](https://github.com/Rain13Sad/ai-patina/actions/workflows/ci.yml/badge.svg)](https://github.com/Rain13Sad/ai-patina/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](docs/cli.md)
+
 > An agent skill that gives machine-written text a human voice — and lowers its AI-detection rate as a side effect.
 
 *Patina* is what a thing acquires by being handled. That is the whole idea: text with patina has passed through someone's hands — their specifics, their opinions, the things they chose to leave out.
@@ -50,7 +54,7 @@ cp -r ai-patina/skills/human-voice ~/.workbuddy-ai/skills/    # WorkBuddy
 
 For a single project, drop it in `.workbuddy-ai/skills/` or `.claude/skills/` instead.
 
-No dependencies. The checker script is Python 3 standard library only.
+No dependencies. The checker script is Python 3 standard library only, and stays that way — CI fails if a third-party import appears.
 
 ## Use
 
@@ -62,36 +66,66 @@ Just ask. The skill triggers on phrases like:
 Or run the checker directly:
 
 ```bash
-python skills/human-voice/scripts/humanity_check.py draft.md
-python skills/human-voice/scripts/humanity_check.py before.md after.md   # compare
-python skills/human-voice/scripts/humanity_check.py --text "一段话" --json
+python skills/human-voice/scripts/humanity_check.py draft.md --genre essay
+python skills/human-voice/scripts/humanity_check.py draft.md --compare draft.before.md
+python skills/human-voice/scripts/humanity_check.py draft.md --json --md
+cat draft.md | python skills/human-voice/scripts/humanity_check.py -
 ```
 
-Sample output on a typical AI paragraph:
+Output on a typical AI paragraph (`--genre essay`):
 
 ```
-[句长波动]  5 句  均 42.6  标准差 13.5  CV 0.32  区间 27–58   → 明显
-            短句(≤10字) 0.0%  [明显]   长句(≥45字) 40.0%
-[段落]      1 段  均 234.0 字  CV 0.0  → 样本不足
-[格式痕迹]  数字空格 0   枚举 1   升华词 2 ['凝聚', '行稳致远']
+═══ examples/zh-before.md  (353 字符, zh, 评论) ═══
 
-── 待办（按优先级）──
-1. 句长过于均匀：CV=0.32（人类常 >0.45）。每 3–4 句插一个极短句。
-2. 主题升华：空转大词：['凝聚', '行稳致远']。删掉拔高，让结论停在具体层面。
+[可信度]  中 —— 可看出趋势，但阈值判断会抖
+[句长波动]  8 sentences  mean 39.1  sd 14.9  CV 0.38  range 18-67
+            short(<=10 字) 0.0%   long(>=45 字) 25.0%   adjacent jump 22.4
+[段落]  4  mean 78.2  CV 0.16  62-96
+[格式痕迹]  digit-space 0  enum 2  grandiose 2  connectors 50.0%
+
+── 待办（按严重度）──
+1. [主要] 缺少短句：极短句仅占 0.0%，目标 ≥12.0%。整篇没有喘气的地方。
+      -> M7
+2. [主要] 段落等长：段落长度 CV=0.16，目标 ≥0.4。长短段交替，允许某段只有一句话。
+      -> M1, M3
+3. [主要] 主题升华：空转大词 2 个：['凝聚', '行稳致远']。删掉拔高，让结论停在具体层面。
+      L7: 总而言之，远程办公是时代发展的必然趋势。唯有积极拥抱变革……
+      -> M2
 ```
 
-The script is bilingual and **deliberately does not output an "AI rate."** It reports six interpretable metrics plus a priority-ordered to-do list. A single number would be false precision.
+Every finding carries the move that fixes it (`M1`–`M14`), so the agent does not have to re-read the skill to act.
+
+Then measure the rewrite against the draft, instead of eyeballing two reports:
+
+```
+═══ 对比：examples/zh-before.md → examples/zh-after.md ═══
+
+                            before     after     delta
+句长 CV                       0.38      0.53     +0.15  改善
+短句占比 %                     0.0      15.4     +15.4  改善
+段落 CV                       0.16      0.54     +0.38  改善
+段首连接词 %                  50.0       0.0     -50.0  改善
+空转大词                         2         0        -2  改善
+枚举标记                         2         0        -2  改善
+
+共 11 项指标：6 改善 / 0 退步 / 5 持平。
+方向正确：结构信号在往人的一侧走。
+```
+
+The script is bilingual: an English draft gets an English report, a Chinese draft a Chinese one, and `--ui-lang` overrides either. It **deliberately does not output an "AI rate."** A single number would be false precision — the real one moves when you change your paragraph breaks.
+
+Full flag reference and the JSON contract: [`docs/cli.md`](docs/cli.md).
 
 ## How it works
 
 | Stage | Do |
 |---|---|
 | **S0** | Fix genre, reader, and how much "person" belongs in it. Getting this wrong makes everything downstream wrong |
-| **S1** | Diagnose: run the checker, do the five-dimension audit, and check facts — invented citations cannot be rewritten away |
+| **S1** | Diagnose: run the checker with the right `--genre`, do the five-dimension audit, and check facts — invented citations cannot be rewritten away |
 | **S2** | Rewrite the structure (70% of the work). Skeleton first; if the skeleton stays, no amount of word-swapping helps |
 | **S3** | Rhythm surgery at sentence level. The goal is not fancier sentences, it is text that breathes |
 | **S4** | Mechanical trace sweep. No judgment needed, but skipping one item wastes the rest |
-| **S5** | Verify: rerun the checker, read aloud, read backwards |
+| **S5** | Verify: `--compare` against the draft, read aloud, read backwards |
 
 **Order matters.** S4 comes after S2/S3, and nothing gets "polished" afterwards — that flattens the surgery.
 
@@ -119,20 +153,41 @@ Full text with before/after examples: [`rewrite-moves.md`](skills/human-voice/re
 ## Repo layout
 
 ```
-skills/human-voice/
-├── SKILL.md                      # the skill: boundaries, audit, workflow
-├── references/
-│   ├── rewrite-moves.md          # 14 moves, Chinese examples
-│   ├── en-writing-guide.md       # same method, English examples + English tells
-│   ├── traces-checklist.md       # S4 sweep + exemptions for formal genres
-│   ├── voice-profile.md          # six-dimension voice extraction, 8 archetypes
-│   ├── detector-model.md         # how detection works, how far to go
-│   └── before-after.md           # three full rewrite case studies
-├── scripts/
-│   └── humanity_check.py         # heuristic self-check, stdlib only
-└── docs/
-    └── ai-text-detection-landscape.md   # background research
+ai-patina/
+├── README.md · README.zh-CN.md
+├── CHANGELOG.md · LICENSE · Makefile
+├── .github/workflows/ci.yml          # tests, JSON contract, stdlib-only check
+├── docs/
+│   ├── cli.md                        # flags, exit codes, JSON schema
+│   ├── roadmap.md                    # why v1.1 looks like this
+│   └── ai-text-detection-landscape.md
+├── examples/                         # before/after fixtures, zh + en
+├── tests/test_humanity_check.py      # 42 tests, stdlib unittest
+└── skills/human-voice/
+    ├── SKILL.md                      # the skill: boundaries, audit, workflow
+    ├── references/
+    │   ├── cli.md                    # the four commands that cover the workflow
+    │   ├── rewrite-moves.md          # 14 moves, Chinese examples
+    │   ├── en-writing-guide.md       # same method, English examples + English tells
+    │   ├── traces-checklist.md       # S4 sweep + exemptions for formal genres
+    │   ├── voice-profile.md          # six-dimension voice extraction, 8 archetypes
+    │   ├── detector-model.md         # how detection works, how far to go
+    │   └── before-after.md           # three full rewrite case studies
+    └── scripts/humanity_check.py     # self-check, stdlib only, no score
 ```
+
+## Development
+
+```bash
+make test        # python -m unittest discover -s tests -v
+make compare     # delta table on the Chinese fixtures
+make compare-en  # same, English
+make blockers    # exits 2 — the CI contract
+```
+
+Thresholds live in one place: the `GENRES` table at the top of `humanity_check.py`. Changing a number there changes the finding, the comparison row, and the tests together.
+
+Where the design came from, and what was deliberately left out: [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Design principles
 
